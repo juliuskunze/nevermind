@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Callable, List
 
 import gym
@@ -5,12 +6,35 @@ import numpy as np
 from gym import Env
 from numpy import ndarray
 
-from deepq import QFunctionApproximation
-from replay import Experience, ReplayBuffer
+from deepq import ValueFunctionApproximation, DeepQNetwork
+from plot import plot_training_summary, plot_cartpole_value_function
+from replay import Experience
+from train import train, timestamp, TrainingContext, PeriodicTrainingCallback
 
 
-def run(env: Env, policy: Callable[[ndarray], ndarray], render=True):
-    while True:
+def save_cartpole_q_plot_callback(period: int = 10000,
+                                  directory: Path = None,
+                                  show_advantage=False):
+    name = 'advantage' if show_advantage else 'value'
+
+    if directory is None:
+        directory = Path('data') / 'plots' / name / timestamp()
+
+    def save(context: TrainingContext):
+        if directory is not None:
+            directory.mkdir(exist_ok=True, parents=True)
+
+        save_to_file = None if directory is None else \
+            directory / f'{name}_step{context.timestep}'
+
+        plot_cartpole_value_function(context.q, save_to_file=save_to_file, show_advantage=show_advantage)
+
+    return PeriodicTrainingCallback(action=save, period=period)
+
+
+def run(env: Env, policy: Callable[[ndarray], ndarray], render=True, episodes=50):
+    episode_rewards: List[float] = []
+    for _ in range(episodes):
         observation = env.reset()
         done = False
         episode_reward = 0
@@ -20,43 +44,21 @@ def run(env: Env, policy: Callable[[ndarray], ndarray], render=True):
             observation, reward, done, info = env.step(policy(observation))
             episode_reward += reward
         print(f'Episode reward: {episode_reward}')
+        episode_rewards.append(episode_reward)
+
+    return episode_rewards
 
 
-def run_greedy(q: QFunctionApproximation, render=True):
+def run_greedy(q: ValueFunctionApproximation, render=True):
     run(q.env, lambda observation: q.greedy_action(observation), render=render)
 
 
-def train(q: QFunctionApproximation, batch_size: int = 32, buffer_size: int = 100, render=True):
-    buffer = ReplayBuffer(size=buffer_size)
-    env = q.env
-
-    while True:
-        observation = env.reset()
-        done = False
-        episode_reward = 0
-        while not done:
-            if render:
-                env.render()
-
-            action = q.greedy_action(observation)
-            new_observation, reward, done, info = env.step(action)
-
-            buffer.add(Experience(observation, action, reward, new_observation))
-
-            observation = new_observation
-
-            episode_reward += reward
-            q.update(experiences=buffer.sample(num=batch_size))
-
-        print(f'Episode reward: {episode_reward}')
-
-
-class ZeroQ(QFunctionApproximation):
+class ZeroQ(ValueFunctionApproximation):
     def __init__(self, env: Env):
         super().__init__(env)
 
-    def values_for(self, observations: ndarray, actions: ndarray):
-        return np.array([0] * observations.shape[0])
+    def all_action_values_for(self, observations: ndarray):
+        return np.zeros((observations.shape[0], self.env.action_space.n))
 
     def update(self, experiences: List[Experience]):
         pass
@@ -65,8 +67,13 @@ class ZeroQ(QFunctionApproximation):
 def main():
     env = gym.make('CartPole-v0')
 
-    train(ZeroQ(env))
+    summary = train(DeepQNetwork(env),
+                    callbacks=[PeriodicTrainingCallback.save_dqn(),
+                               save_cartpole_q_plot_callback(),
+                               save_cartpole_q_plot_callback(show_advantage=True)])
+    plot_training_summary(summary)
 
 
 if __name__ == '__main__':
-    main()
+    for _ in range(10):
+        main()

@@ -3,11 +3,11 @@ from typing import Any, List
 
 
 class Experience:
-    def __init__(self, observation: Any, action: Any, reward: int, new_observation: Any):
+    def __init__(self, observation: Any, action: Any, reward: int, next_observation: Any):
         self.observation = observation
         self.action = action
         self.reward = reward
-        self.new_observation = new_observation
+        self.next_observation = next_observation
 
 
 class ReplayBuffer:

@@ -90,12 +90,17 @@ class DeepQNetwork(ValueFunctionApproximation):
         return self.target_model_function([observations])[0]
 
     def update(self, experiences: List[Experience]):
+        def null_to_nan(observation):
+            return np.full(self.env.observation_space.shape, np.nan) if observation is None else observation
+
         observations = np.array([e.observation for e in experiences])
-        next_observations = np.array([e.next_observation for e in experiences])
-        rewards = np.array([e.reward for e in experiences])
+        next_observations = np.array([null_to_nan(e.next_observation) for e in experiences])
         actions = np.array([e.action for e in experiences])
 
-        target_values = rewards + self.discount_factor * np.max(self.all_action_values_for(next_observations), axis=-1)
+        next_value_estimates = self.all_action_values_for(next_observations)
+
+        target_values = [e.reward + self.discount_factor * (
+            0 if e.is_terminal else max(next_value_estimates[i])) for i, e in enumerate(experiences)]
 
         targets = self.model_function([observations])[0]
         for target, action, target_value in zip(targets, actions, target_values):

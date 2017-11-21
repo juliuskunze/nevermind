@@ -1,13 +1,17 @@
 import random
-from typing import Any, List
+from typing import Any, List, Optional
 
 
 class Experience:
-    def __init__(self, observation: Any, action: Any, reward: int, next_observation: Any):
+    def __init__(self, observation: Any, action: Any, reward: float, next_observation: Optional[Any]):
         self.observation = observation
         self.action = action
         self.reward = reward
         self.next_observation = next_observation
+
+    @property
+    def is_terminal(self):
+        return self.next_observation is None
 
 
 class ReplayBuffer:

@@ -9,7 +9,7 @@ from numpy import ndarray
 from deepq import ValueFunctionApproximation, DeepQNetwork
 from plot import plot_training_summary, plot_cartpole_value_function
 from replay import Experience
-from train import train, timestamp, TrainingContext, PeriodicTrainingCallback
+from train import train, timestamp, PeriodicTrainingCallback, TrainingSummary
 
 
 def save_cartpole_q_plot_callback(period: int = 10000,
@@ -20,14 +20,14 @@ def save_cartpole_q_plot_callback(period: int = 10000,
     if directory is None:
         directory = Path('data') / 'plots' / name / timestamp()
 
-    def save(context: TrainingContext):
+    def save(summary: TrainingSummary):
         if directory is not None:
             directory.mkdir(exist_ok=True, parents=True)
 
         save_to_file = None if directory is None else \
-            directory / f'{name}_step{context.timestep}'
+            directory / f'{name}_step{summary.timestep}'
 
-        plot_cartpole_value_function(context.q, save_to_file=save_to_file, show_advantage=show_advantage)
+        plot_cartpole_value_function(summary.q, save_to_file=save_to_file, show_advantage=show_advantage)
 
     return PeriodicTrainingCallback(action=save, period=period)
 
@@ -67,13 +67,16 @@ class ZeroQ(ValueFunctionApproximation):
 def main():
     env = gym.make('CartPole-v0')
 
+    def is_solved(summary: TrainingSummary):
+        return len(summary.episode_rewards) >= 100 and np.average(summary.episode_rewards[-100:]) >= 199
+
     summary = train(DeepQNetwork(env),
                     callbacks=[PeriodicTrainingCallback.save_dqn(),
                                save_cartpole_q_plot_callback(),
-                               save_cartpole_q_plot_callback(show_advantage=True)])
+                               save_cartpole_q_plot_callback(show_advantage=True)],
+                    is_solved=is_solved)
     plot_training_summary(summary)
 
 
 if __name__ == '__main__':
-    for _ in range(10):
-        main()
+    main()

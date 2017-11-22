@@ -1,27 +1,37 @@
 from math import pi
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
 
 from deepq import ValueFunctionApproximation
-from train import TrainingSummary, timestamp
+from train import TrainingSummary
 
 
-def plot_training_summary(summary: TrainingSummary,
-                          save_to_file: Path = Path('data') / 'summary' / f'summary{timestamp()}'):
-    fig, (ax_reward, ax_loss) = plt.subplots(nrows=2)
-
-    ax_reward.set_title("Reward")
-    ax_reward.plot(range(len(summary.episode_rewards)), summary.episode_rewards)
-
-    ax_loss.set_title("Loss")
-    ax_loss.plot(range(len(summary.losses)), summary.losses)
-
+def save_or_show(fig: Figure, save_to_file: Optional[Path]):
     if save_to_file is None:
         plt.show()
     else:
+        Path(save_to_file.parent).mkdir(exist_ok=True, parents=True)
         plt.savefig(str(save_to_file))
+        plt.close(fig)
+
+
+def plot_training_summary(summary: TrainingSummary, save_to_file: Path = None):
+    fig, (ax_episode_reward, ax_loss) = plt.subplots(nrows=2)
+    fig.suptitle('Training summary')
+
+    ax_episode_reward.set_ylabel('return')
+    ax_episode_reward.set_xlabel('episode')
+    ax_episode_reward.plot(range(len(summary.returns)), summary.returns)
+
+    ax_loss.set_ylabel('value prediction loss')
+    ax_loss.set_xlabel('timestep')
+    ax_loss.plot(range(len(summary.losses)), summary.losses)
+
+    save_or_show(fig, save_to_file)
 
 
 def plot_cartpole_value_function(q: ValueFunctionApproximation, save_to_file: Path = None, show_advantage=False):
@@ -73,13 +83,10 @@ def plot_cartpole_value_function(q: ValueFunctionApproximation, save_to_file: Pa
             v = values[θdot_index][xdot_index]
 
             im = ax.imshow(v[:, :, action], extent=[-max_x, max_x, -max_θ, max_θ], aspect='auto', vmin=min_value,
-                           vmax=max_value)
+                           vmax=max_value, cmap='seismic' if show_advantage else 'inferno')
 
     fig.subplots_adjust(right=0.8)
     cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
     fig.colorbar(im, cax=cbar_ax, label=name)
 
-    if save_to_file is None:
-        plt.show()
-    else:
-        plt.savefig(str(save_to_file))
+    save_or_show(fig, save_to_file)

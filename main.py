@@ -1,4 +1,5 @@
 from pathlib import Path
+from time import strftime
 from typing import Callable, List
 
 import gym
@@ -9,7 +10,11 @@ from numpy import ndarray
 from deepq import ValueFunctionApproximation, DeepQNetwork
 from plot import plot_training_summary, plot_cartpole_value_function
 from replay import Experience
-from train import train, timestamp, PeriodicTrainingCallback, TrainingSummary
+from train import train, PeriodicTrainingCallback, TrainingSummary
+
+
+def timestamp() -> str:
+    return strftime('%Y%m%d-%H%M%S')
 
 
 def save_cartpole_q_plot_callback(period: int = 10000,
@@ -18,7 +23,7 @@ def save_cartpole_q_plot_callback(period: int = 10000,
     name = 'advantage' if show_advantage else 'value'
 
     if directory is None:
-        directory = Path('data') / 'plots' / name / timestamp()
+        directory = Path('data') / 'plots' / 'CartPole-v0' / name / timestamp()
 
     def save(summary: TrainingSummary):
         if directory is not None:
@@ -64,19 +69,43 @@ class ZeroQ(ValueFunctionApproximation):
         pass
 
 
-def main():
-    env = gym.make('CartPole-v0')
-
-    def is_solved(summary: TrainingSummary):
-        return len(summary.episode_rewards) >= 100 and np.average(summary.episode_rewards[-100:]) >= 199
+def train_and_plot(env_name,
+                   extra_callbacks: List[PeriodicTrainingCallback] = list(),
+                   run_name=timestamp(),
+                   is_solved: Callable[[TrainingSummary], bool] = lambda s: False):
+    env = gym.make(env_name)
 
     summary = train(DeepQNetwork(env),
-                    callbacks=[PeriodicTrainingCallback.save_dqn(),
-                               save_cartpole_q_plot_callback(),
-                               save_cartpole_q_plot_callback(show_advantage=True)],
+                    callbacks=[PeriodicTrainingCallback.save_dqn(
+                        directory=Path('data') / 'models' / env_name / run_name)] + extra_callbacks,
                     is_solved=is_solved)
-    plot_training_summary(summary)
+    plot_training_summary(summary, Path('data') / 'plots' / env_name / 'summary' / f'summary{run_name}')
+
+
+def average_return_above(minimum_average_return: float, num_last_episodes: int = 100):
+    def is_stable(summary: TrainingSummary):
+        return len(summary.returns) >= num_last_episodes and \
+               np.average(summary.returns[-num_last_episodes:]) >= minimum_average_return
+
+    return is_stable
+
+
+def train_cartpole():
+    train_and_plot('CartPole-v0', extra_callbacks=[
+        save_cartpole_q_plot_callback(),
+        save_cartpole_q_plot_callback(show_advantage=True)],
+                   is_solved=average_return_above(195))
+
+
+def train_lunar_lander():
+    train_and_plot('LunarLander-v2', is_solved=average_return_above(200),
+                   extra_callbacks=[PeriodicTrainingCallback.render()])
+
+
+def train_mountain_car():
+    train_and_plot('MountainCar-v0', is_solved=average_return_above(-110),
+                   extra_callbacks=[PeriodicTrainingCallback.render()])
 
 
 if __name__ == '__main__':
-    main()
+    train_cartpole()

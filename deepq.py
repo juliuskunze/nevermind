@@ -13,9 +13,7 @@ from numpy import ndarray
 from replay import Experience
 
 
-class ValueFunctionApproximation:
-    __metaclass__ = abc.ABCMeta
-
+class ValueFunctionApproximation(abc.ABC):
     def __init__(self, env: Env):
         self.env = env
         space = self.env.action_space

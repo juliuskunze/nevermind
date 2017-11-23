@@ -20,16 +20,25 @@ def save_or_show(fig: Figure, save_to_file: Optional[Path]):
 
 
 def plot_training_summary(summary: TrainingSummary, save_to_file: Path = None):
-    fig, (ax_episode_reward, ax_loss) = plt.subplots(nrows=2)
+    fig, (ax_episode_reward, ax_episode_length, ax_value_loss, ax_exploration_rate) = \
+        plt.subplots(nrows=4, figsize=(8, 15))
     fig.suptitle('Training summary')
 
     ax_episode_reward.set_ylabel('return')
     ax_episode_reward.set_xlabel('episode')
-    ax_episode_reward.plot(range(len(summary.returns)), summary.returns)
+    ax_episode_reward.plot(summary.returns)
 
-    ax_loss.set_ylabel('value prediction loss')
-    ax_loss.set_xlabel('timestep')
-    ax_loss.plot(range(len(summary.losses)), summary.losses)
+    ax_episode_length.set_ylabel('episode length')
+    ax_episode_length.set_xlabel('episode')
+    ax_episode_length.plot(summary.episode_lengths)
+
+    ax_exploration_rate.set_ylabel('exploration')
+    ax_exploration_rate.set_xlabel('timestep')
+    ax_exploration_rate.plot(summary.exploration_rates)
+
+    ax_value_loss.set_ylabel('value prediction loss')
+    ax_value_loss.set_xlabel('timestep')
+    ax_value_loss.plot(summary.losses)
 
     save_or_show(fig, save_to_file)
 

@@ -23,7 +23,11 @@ class TrainingSummary:
                  q: ValueFunctionApproximation,
                  timestep: int = 0,
                  returns: List[float] = list(),
-                 losses: List[float] = list()):
+                 losses: List[float] = list(),
+                 exploration_rates: List[float] = list(),
+                 episode_lengths: List[int] = list()):
+        self.episode_lengths = episode_lengths
+        self.exploration_rates = exploration_rates
         self.q = q
         self.timestep = timestep
         self.losses = losses
@@ -60,7 +64,7 @@ class PeriodicTrainingCallback:
 def train(q: ValueFunctionApproximation,
           batch_size: int = 32,
           buffer_size: int = 50000,
-          num_timesteps: int = 500000,
+          num_timesteps: int = 100000,
           learning_starts: int = 1000,
           exploration_by_timestep: Callable[[float], float] = None,
           callbacks: Sequence[PeriodicTrainingCallback] = (),
@@ -80,13 +84,15 @@ def train(q: ValueFunctionApproximation,
         observation = env.reset()
         done = False
         episode_return = 0
+        episode_length = 0
 
         while True:
             for callback in callbacks:
                 if summary.timestep % callback.period == 0:
                     callback(summary)
 
-            explore = random.random() < exploration_by_timestep(summary.timestep)
+            exploration_rate = exploration_by_timestep(summary.timestep)
+            explore = random.random() < exploration_rate
             action = env.action_space.sample() if explore else q.greedy_action(observation)
             next_observation, reward, done, info = (None, 0., True, None) if done else env.step(int(action))
 
@@ -96,17 +102,20 @@ def train(q: ValueFunctionApproximation,
             observation = next_observation
 
             episode_return += reward
+            episode_length += 1
             if summary.timestep >= learning_starts:
                 experiences = buffer.sample(num=batch_size)
                 loss = q.update(experiences=experiences)
                 summary.losses.append(loss)
             summary.timestep += 1
+            summary.exploration_rates.append(exploration_rate)
 
             if experience.is_terminal:
                 break
 
-        print(f'Return #{len(summary.returns)}: {episode_return}')
+        print(f'Return #{len(summary.returns)}: {episode_return}, exploration rate: {exploration_rate:.2f}')
         summary.returns.append(episode_return)
+        summary.episode_lengths.append(episode_length)
 
         if is_solved(summary):
             print('Environment solved.')

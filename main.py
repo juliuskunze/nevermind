@@ -69,17 +69,12 @@ class ZeroQ(ValueFunctionApproximation):
         pass
 
 
-def train_and_plot(env_name,
-                   extra_callbacks: List[PeriodicTrainingCallback] = list(),
-                   run_name=timestamp(),
-                   is_solved: Callable[[TrainingSummary], bool] = lambda s: False):
-    env = gym.make(env_name)
+def summary_file(env_name: str, run_name: str):
+    return Path('data') / 'plots' / env_name / 'summary' / f'summary{run_name}'
 
-    summary = train(DeepQNetwork(env),
-                    callbacks=[PeriodicTrainingCallback.save_dqn(
-                        directory=Path('data') / 'models' / env_name / run_name)] + extra_callbacks,
-                    is_solved=is_solved)
-    plot_training_summary(summary, Path('data') / 'plots' / env_name / 'summary' / f'summary{run_name}')
+
+def save_callback(env_name: str, run_name: str):
+    return PeriodicTrainingCallback.save_dqn(directory=Path('data') / 'models' / env_name / run_name)
 
 
 def average_return_above(minimum_average_return: float, num_last_episodes: int = 100):
@@ -91,20 +86,32 @@ def average_return_above(minimum_average_return: float, num_last_episodes: int =
 
 
 def train_cartpole():
-    train_and_plot('CartPole-v0', extra_callbacks=[
-        save_cartpole_q_plot_callback(),
-        save_cartpole_q_plot_callback(show_advantage=True)],
-                   is_solved=average_return_above(195))
+    run_name = timestamp()
+    env_name = 'CartPole-v0'
+    summary = train(DeepQNetwork(gym.make(env_name)),
+                    callbacks=[save_callback(env_name, run_name=run_name),
+                               save_cartpole_q_plot_callback(),
+                               save_cartpole_q_plot_callback(show_advantage=True)],
+                    is_solved=average_return_above(195))
+    plot_training_summary(summary, summary_file(env_name, run_name=run_name))
 
 
 def train_lunar_lander():
-    train_and_plot('LunarLander-v2', is_solved=average_return_above(200),
-                   extra_callbacks=[PeriodicTrainingCallback.render()])
+    run_name = timestamp()
+    env_name = 'LunarLander-v2'
+    summary = train(DeepQNetwork(gym.make(env_name)),
+                    callbacks=[save_callback(env_name, run_name=run_name), PeriodicTrainingCallback.render()],
+                    is_solved=average_return_above(200))
+    plot_training_summary(summary, summary_file(env_name, run_name=run_name))
 
 
 def train_mountain_car():
-    train_and_plot('MountainCar-v0', is_solved=average_return_above(-110),
-                   extra_callbacks=[PeriodicTrainingCallback.render()])
+    run_name = timestamp()
+    env_name = 'MountainCar-v0'
+    summary = train(DeepQNetwork(gym.make(env_name)),
+                    callbacks=[save_callback(env_name, run_name=run_name), PeriodicTrainingCallback.render()],
+                    is_solved=average_return_above(-110))
+    plot_training_summary(summary, summary_file(env_name, run_name=run_name))
 
 
 if __name__ == '__main__':

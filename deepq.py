@@ -55,7 +55,7 @@ def sum_squared_error(y_pred, y_true):
 
 class DeepQNetwork(ValueFunctionApproximation):
     def __init__(self, env: Env, architecture: Callable[[], Sequential] = None,
-                 target_model_update_period: int = 1000,
+                 target_model_update_period: int = 500,
                  optimizer: Optimizer = Adam(lr=1e-3),
                  discount_factor: float = 1.):
         super().__init__(env)

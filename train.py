@@ -25,7 +25,9 @@ class TrainingSummary:
                  returns: List[float] = list(),
                  losses: List[float] = list(),
                  exploration_rates: List[float] = list(),
-                 episode_lengths: List[int] = list()):
+                 episode_lengths: List[int] = list(),
+                 buffer_size: List[int] = list()):
+        self.buffer_sizes = buffer_size
         self.episode_lengths = episode_lengths
         self.exploration_rates = exploration_rates
         self.q = q
@@ -63,9 +65,11 @@ class PeriodicTrainingCallback:
 
 def train(q: ValueFunctionApproximation,
           batch_size: int = 32,
-          buffer_size: int = 50000,
+          replay_buffer_size: int = 50000,
           num_timesteps: int = 100000,
           learning_starts: int = 1000,
+          final_exploration: float = .02,
+          exploration_time_share: float = .1,
           exploration_by_timestep: Callable[[float], float] = None,
           callbacks: Sequence[PeriodicTrainingCallback] = (),
           is_solved: Callable[[TrainingSummary], bool] = lambda s: False):
@@ -73,11 +77,11 @@ def train(q: ValueFunctionApproximation,
         exploration_by_timestep = linearly_decreasing_exploration(
             initial_exploration=1.,
             decrease_start=learning_starts,
-            decrease_timesteps=int(num_timesteps * .1),
-            final_exploration=.02)
+            decrease_timesteps=int(num_timesteps * exploration_time_share),
+            final_exploration=final_exploration)
 
     summary = TrainingSummary(q=q)
-    buffer = ReplayBuffer(size=buffer_size)
+    buffer = ReplayBuffer(size=replay_buffer_size)
     env = q.env
 
     while summary.timestep < num_timesteps:
@@ -98,6 +102,7 @@ def train(q: ValueFunctionApproximation,
 
             experience = Experience(observation, action, reward, next_observation)
             buffer.add(experience)
+            summary.buffer_sizes.append(len(buffer))
 
             observation = next_observation
 

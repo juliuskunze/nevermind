@@ -20,8 +20,8 @@ def save_or_show(fig: Figure, save_to_file: Optional[Path]):
 
 
 def plot_training_summary(summary: TrainingSummary, save_to_file: Path = None):
-    fig, (ax_episode_reward, ax_episode_length, ax_value_loss, ax_exploration_rate) = \
-        plt.subplots(nrows=4, figsize=(8, 15))
+    fig, (ax_episode_reward, ax_episode_length, ax_value_loss, ax_exploration_rate, ax_buffer_size) = \
+        plt.subplots(nrows=5, figsize=(8, 20))
     fig.suptitle('Training summary')
 
     ax_episode_reward.set_ylabel('return')
@@ -39,6 +39,10 @@ def plot_training_summary(summary: TrainingSummary, save_to_file: Path = None):
     ax_value_loss.set_ylabel('value prediction loss')
     ax_value_loss.set_xlabel('timestep')
     ax_value_loss.plot(summary.losses)
+
+    ax_buffer_size.set_ylabel('buffer size')
+    ax_buffer_size.set_xlabel('timestep')
+    ax_buffer_size.plot(summary.buffer_sizes)
 
     save_or_show(fig, save_to_file)
 

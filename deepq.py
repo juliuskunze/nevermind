@@ -1,6 +1,6 @@
-import abc
+from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, Sequence
 
 import numpy as np
 from gym import Env
@@ -13,7 +13,7 @@ from numpy import ndarray
 from replay import Experience
 
 
-class ValueFunctionApproximation(abc.ABC):
+class ValueFunctionApproximation(ABC):
     def __init__(self, env: Env):
         self.env = env
         space = self.env.action_space
@@ -21,10 +21,10 @@ class ValueFunctionApproximation(abc.ABC):
         if not isinstance(space, Discrete):
             raise ValueError('Action space must be discrete.')
 
-    @abc.abstractmethod
+    @abstractmethod
     def all_action_values_for(self, observations: ndarray) -> ndarray:
         """Returns values for all possible actions for all observations in the provided batch."""
-        raise NotImplementedError("To override.")
+        raise NotImplementedError
 
     def all_greedy_actions(self, observation: ndarray) -> ndarray:
         values = self.all_action_values_for(observations=np.array([observation]))[0]
@@ -34,14 +34,15 @@ class ValueFunctionApproximation(abc.ABC):
     def greedy_action(self, observation: ndarray) -> ndarray:
         return np.random.choice(self.all_greedy_actions(observation))
 
-    @abc.abstractmethod
+    @abstractmethod
     def update(self, experiences: List[Experience]):
-        raise NotImplementedError("To override.")
+        raise NotImplementedError
 
 
-def mlp(input_shape: Tuple[int], layers_sizes: List[int] = (64,)):
+def mlp(input_shape: Tuple[int], num_outputs: int, hidden_layers_sizes: Sequence[int] = (64,)):
     return Sequential(layers=[Dense(size, activation='relu', input_shape=input_shape if index == 0 else [None])
-                              for index, size in enumerate(layers_sizes)])
+                              for index, size in enumerate(hidden_layers_sizes)] +
+                             [Dense(num_outputs)])
 
 
 def sum_squared_error(y_pred, y_true):
@@ -62,7 +63,7 @@ class DeepQNetwork(ValueFunctionApproximation):
 
         if architecture is None:
             architecture = lambda: mlp(input_shape=self.env.observation_space.shape,
-                                       layers_sizes=[64, self.env.action_space.n])
+                                       num_outputs=self.env.action_space.n)
 
         self.optimizer = optimizer
         self.discount_factor = discount_factor

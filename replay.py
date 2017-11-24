@@ -32,3 +32,6 @@ class ReplayBuffer:
 
     def sample(self, num: int):
         return random.choices(self._experiences, k=num)
+
+    def __len__(self):
+        return len(self._experiences)

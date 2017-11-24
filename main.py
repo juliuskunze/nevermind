@@ -4,10 +4,14 @@ from typing import Callable, List
 
 import gym
 import numpy as np
+import tensorflow as tf
 from gym import Env
+from keras import optimizers, Sequential
+from keras.layers import Conv2D, Dense, Flatten
 from numpy import ndarray
 
 from deepq import ValueFunctionApproximation, DeepQNetwork
+from env import atari_env
 from plot import plot_training_summary, plot_cartpole_value_function
 from replay import Experience
 from train import train, PeriodicTrainingCallback, TrainingSummary
@@ -99,7 +103,9 @@ def train_cartpole():
 def train_lunar_lander():
     run_name = timestamp()
     env_name = 'LunarLander-v2'
-    summary = train(DeepQNetwork(gym.make(env_name)),
+    summary = train(DeepQNetwork(gym.make(env_name), target_model_update_period=10000),
+                    replay_buffer_size=100000,
+                    num_timesteps=5000000,
                     callbacks=[save_callback(env_name, run_name=run_name), PeriodicTrainingCallback.render()],
                     is_solved=average_return_above(200))
     plot_training_summary(summary, summary_file(env_name, run_name=run_name))
@@ -114,5 +120,35 @@ def train_mountain_car():
     plot_training_summary(summary, summary_file(env_name, run_name=run_name))
 
 
+def train_atari(game_name='breakout'):
+    run_name = timestamp()
+    env = atari_env(game_name)
+
+    def architecture():
+        return Sequential([
+            Conv2D(32, (8, 8), strides=(4, 4), input_shape=(84, 84, 4), activation='relu'),
+            Conv2D(64, (4, 4), strides=(2, 2), activation='relu'),
+            Conv2D(64, (3, 3), activation='relu'),
+            Flatten(),
+            Dense(512, activation='relu'),
+            Dense(env.action_space.n)
+        ])
+
+    optimizer = optimizers.TFOptimizer(tf.train.RMSPropOptimizer(learning_rate=2.5e-4, momentum=.95, epsilon=.01))
+
+    num_timesteps = 10000000
+
+    summary = train(DeepQNetwork(env, architecture=architecture, optimizer=optimizer,
+                                 target_model_update_period=10000,
+                                 discount_factor=.99),
+                    num_timesteps=num_timesteps,
+                    replay_buffer_size=1000000,
+                    final_exploration=.1,
+                    exploration_time_share=1000000 / num_timesteps,
+                    learning_starts=50000,
+                    callbacks=[save_callback(game_name, run_name=run_name), PeriodicTrainingCallback.render()])
+    plot_training_summary(summary, summary_file(game_name, run_name=run_name))
+
+
 if __name__ == '__main__':
-    train_cartpole()
+    train_atari()

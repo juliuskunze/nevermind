@@ -36,7 +36,7 @@ def plot_training_summary(summary: TrainingSummary, save_to_file: Path = None):
     ax_exploration_rate.set_xlabel('timestep')
     ax_exploration_rate.plot(summary.exploration_rates)
 
-    ax_value_loss.set_ylabel('value prediction loss')
+    ax_value_loss.set_ylabel(f'mean {"huber" if summary.q.clip_error else "square"} loss for q')
     ax_value_loss.set_xlabel('timestep')
     ax_value_loss.plot(summary.losses)
 

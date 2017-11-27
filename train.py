@@ -118,11 +118,14 @@ def train(q: ValueFunctionApproximation,
             if experience.is_terminal:
                 break
 
-        print(f'Return #{len(summary.returns)}: {episode_return}, exploration rate: {exploration_rate:.2f}')
+        print(f'Return #{len(summary.returns)}: {episode_return}, exploration rate: {exploration_rate:.2f}, ' +
+              f'timestep {summary.timestep} ({100 * summary.timestep / num_timesteps:.2f}%)')
         summary.returns.append(episode_return)
         summary.episode_lengths.append(episode_length)
 
         if is_solved(summary):
+            for callback in callbacks:
+                callback(summary)
             print('Environment solved.')
             break
 

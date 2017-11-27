@@ -140,7 +140,8 @@ def train_atari(game_name='breakout'):
 
     summary = train(DeepQNetwork(env, architecture=architecture, optimizer=optimizer,
                                  target_model_update_period=10000,
-                                 discount_factor=.99),
+                                 discount_factor=.99,
+                                 clip_error=True),
                     num_timesteps=num_timesteps,
                     replay_buffer_size=1000000,
                     final_exploration=.1,

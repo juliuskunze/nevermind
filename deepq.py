@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import List, Tuple, Callable, Sequence
 
 import numpy as np
+import tensorflow as tf
 from gym import Env
 from gym.spaces import Discrete
 from keras import Sequential, losses
@@ -45,21 +46,19 @@ def mlp(input_shape: Tuple[int], num_outputs: int, hidden_layers_sizes: Sequence
                              [Dense(num_outputs)])
 
 
-def sum_squared_error(y_pred, y_true):
-    """
-    One experience only contains a target value for one particular action.
-    The target is set equal to the prediction for all other actions.
-    Therefore, the error is only non-zero for one particular action.     
-    As a result, a sum can be used to return just this error."""
-    return K.sum(K.square(y_pred - y_true), axis=-1)
+def mean_huber_loss(predictions, labels):
+    return tf.losses.huber_loss(labels=labels, predictions=predictions)
 
 
 class DeepQNetwork(ValueFunctionApproximation):
     def __init__(self, env: Env, architecture: Callable[[], Sequential] = None,
                  target_model_update_period: int = 500,
+                 clip_error: bool = False,
                  optimizer: Optimizer = Adam(lr=1e-3),
                  discount_factor: float = 1.):
         super().__init__(env)
+
+        self.clip_error = clip_error
 
         if architecture is None:
             architecture = lambda: mlp(input_shape=self.env.observation_space.shape,
@@ -76,7 +75,7 @@ class DeepQNetwork(ValueFunctionApproximation):
 
     def create_model_and_function(self, architecture: Callable[[], Sequential]):
         result = architecture()
-        result.compile(optimizer=self.optimizer, loss=losses.mean_squared_error)
+        result.compile(optimizer=self.optimizer, loss=mean_huber_loss if self.clip_error else losses.mean_squared_error)
         return result, K.function(result.inputs, result.outputs)
 
     def update_target_model(self):
@@ -98,6 +97,8 @@ class DeepQNetwork(ValueFunctionApproximation):
 
         next_value_estimates = self.all_action_values_for(next_observations)
 
+        # The target is set to the prediction for all actions but the one have a target value for from the experience.
+        # Therefore, the error is only non-zero for one particular action and we can just sum to get this error.
         target_values = [e.reward + self.discount_factor * (
             0 if e.is_terminal else max(next_value_estimates[i])) for i, e in enumerate(experiences)]
 

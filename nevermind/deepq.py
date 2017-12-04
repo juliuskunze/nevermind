@@ -11,7 +11,7 @@ from keras.layers import Dense, K
 from keras.optimizers import Adam, Optimizer
 from numpy import ndarray
 
-from replay import Experience
+from nevermind.replay import Experience
 
 
 class ValueFunctionApproximation(ABC):

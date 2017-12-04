@@ -2,8 +2,8 @@ import random
 from pathlib import Path
 from typing import Callable, Sequence, List
 
-from deepq import ValueFunctionApproximation, DeepQNetwork
-from replay import ReplayBuffer, Experience
+from nevermind.deepq import ValueFunctionApproximation, DeepQNetwork
+from nevermind.replay import ReplayBuffer, Experience
 
 
 def linearly_decreasing_exploration(initial_exploration: float, decrease_start: int, decrease_timesteps: int,
@@ -19,21 +19,14 @@ def linearly_decreasing_exploration(initial_exploration: float, decrease_start: 
 
 
 class TrainingSummary:
-    def __init__(self,
-                 q: ValueFunctionApproximation,
-                 timestep: int = 0,
-                 returns: List[float] = list(),
-                 losses: List[float] = list(),
-                 exploration_rates: List[float] = list(),
-                 episode_lengths: List[int] = list(),
-                 buffer_size: List[int] = list()):
-        self.buffer_sizes = buffer_size
-        self.episode_lengths = episode_lengths
-        self.exploration_rates = exploration_rates
+    def __init__(self, q: ValueFunctionApproximation, timestep: int = 0):
         self.q = q
         self.timestep = timestep
-        self.losses = losses
-        self.returns = returns
+        self.returns: List[float] = []
+        self.losses: List[float] = []
+        self.exploration_rates: List[float] = []
+        self.episode_lengths: List[int] = []
+        self.buffer_sizes: List[int] = []
 
 
 class PeriodicTrainingCallback:

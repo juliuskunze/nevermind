@@ -1,13 +1,13 @@
 from math import pi
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence, List
 
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 
-from deepq import ValueFunctionApproximation
-from train import TrainingSummary
+from nevermind.deepq import ValueFunctionApproximation
+from nevermind.train import TrainingSummary
 
 
 def save_or_show(fig: Figure, save_to_file: Optional[Path]):
@@ -19,30 +19,42 @@ def save_or_show(fig: Figure, save_to_file: Optional[Path]):
         plt.close(fig)
 
 
-def plot_training_summary(summary: TrainingSummary, save_to_file: Path = None):
+def plot_training_summaries(summaries: Sequence[TrainingSummary], save_to_file: Path = None):
     fig, (ax_episode_reward, ax_episode_length, ax_value_loss, ax_exploration_rate, ax_buffer_size) = \
         plt.subplots(nrows=5, figsize=(8, 20))
     fig.suptitle('Training summary')
 
+    def plot_average(ax, lines: Sequence[List[float]]):
+        max_iter = np.max([len(l) for l in lines])
+
+        padded = np.array([line + ([line[-1]] * (max_iter - len(line))) for line in lines], dtype=np.float)
+
+        mean = padded.mean(0)
+        ax.plot(mean)
+        ax.fill_between(range(len(list(mean))), padded.min(0), padded.max(0), alpha=.1)
+
     ax_episode_reward.set_ylabel('return')
     ax_episode_reward.set_xlabel('episode')
-    ax_episode_reward.plot(summary.returns)
+    plot_average(ax_episode_reward, [summary.returns for summary in summaries])
 
     ax_episode_length.set_ylabel('episode length')
     ax_episode_length.set_xlabel('episode')
-    ax_episode_length.plot(summary.episode_lengths)
+
+    plot_average(ax_episode_length, [summary.episode_lengths for summary in summaries])
 
     ax_exploration_rate.set_ylabel('exploration')
     ax_exploration_rate.set_xlabel('timestep')
-    ax_exploration_rate.plot(summary.exploration_rates)
+    for summary in summaries:
+        ax_exploration_rate.plot(summary.exploration_rates)
 
     ax_value_loss.set_ylabel(f'mean {"huber" if summary.q.clip_error else "square"} loss for q')
     ax_value_loss.set_xlabel('timestep')
-    ax_value_loss.plot(summary.losses)
+    plot_average(ax_value_loss, [summary.losses for summary in summaries])
 
     ax_buffer_size.set_ylabel('buffer size')
     ax_buffer_size.set_xlabel('timestep')
-    ax_buffer_size.plot(summary.buffer_sizes)
+    for summary in summaries:
+        ax_buffer_size.plot(summary.buffer_sizes)
 
     save_or_show(fig, save_to_file)
 

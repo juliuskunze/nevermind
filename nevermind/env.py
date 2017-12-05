@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from collections import deque
 from random import randint
-from typing import Tuple, Sequence
+from typing import Tuple, Sequence, List
 
 import cv2
 import numpy as np
@@ -27,23 +27,6 @@ class NoopRandomStart(Wrapper):
         super().__init__(env)
         self.noop_action = noop_action
         self.max_num_noop = max_num_noop
-
-
-class Transpose(ObservationWrapper):
-    def __init__(self, new_axis_order: Sequence[int], env: Env):
-        super().__init__(env)
-        self.new_axis_order = new_axis_order
-        e = self.env.observation_space
-        if not (isinstance(e, Box) and len(e.shape) == len(new_axis_order)):
-            raise Exception('Axes count should match environment box shape dimensionality.')
-        self.observation_space = Box(e.low.item(0), e.high.item(0), [e.shape[i] for i in new_axis_order])
-
-    def _observation(self, observation: ndarray):
-        swapped = observation.transpose(self.new_axis_order)
-
-        assert self.observation_space.contains(swapped)
-
-        return swapped
 
 
 class Grayscale(ObservationWrapper):
@@ -74,7 +57,8 @@ class Resize(ObservationWrapper):
         self.observation_space = Box(e.low.item(0), e.high.item(0), shape)
 
     def _observation(self, observation: ndarray):
-        resized = cv2.resize(observation, self.shape)
+        # When full, the DQN replay buffer contains 1M stacks of 4 images each. To save memory, we use 16-bit floats:
+        resized = np.array(cv2.resize(observation, self.shape), dtype=np.float16)
         assert self.observation_space.contains(resized)
         return resized
 
@@ -115,12 +99,10 @@ class ConvolutionWrapper(Wrapper):
         return self._observation(), reward, done, info
 
     def _observation(self):
-        convolved = self.convolve(np.array(self.observations_queue))
-        assert self.observation_space.contains(convolved)
-        return convolved
+        return self.convolve(list(self.observations_queue))
 
     @abstractmethod
-    def convolve(self, observations: ndarray):
+    def convolve(self, observations: List[ndarray]):
         raise NotImplementedError
 
     def __init__(self, env: Env, size: int):
@@ -130,15 +112,17 @@ class ConvolutionWrapper(Wrapper):
 
 
 class Maximum(ConvolutionWrapper):
-    def convolve(self, observations: ndarray):
-        return observations.max(0)
+    def convolve(self, observations: List[ndarray]):
+        return np.max(observations, 0)
 
     def __init__(self, env: Env, size: int = 2):
         super().__init__(env, size=size)
 
 
 class History(ConvolutionWrapper):
-    def convolve(self, observations: ndarray):
+    def convolve(self, observations: List[ndarray]):
+        # When full, the DQN replay buffer contains 1M stacks of 4 images each. To save memory,
+        # stacked frames are not duplicated into an array, but instead referenced multiple times from a list:
         return observations
 
     def __init__(self, env: Env, size: int = 4):
@@ -153,5 +137,5 @@ class ClipReward(RewardWrapper):
 
 
 def atari_env(game: str):
-    return ClipReward(Transpose((1, 2, 0), History(SkipWrapper(4)(Resize((84, 84), Normalize(Grayscale(
-        Maximum(NoopRandomStart(AtariEnv(game=game, obs_type='image', frameskip=1))))))))))
+    return ClipReward(History(SkipWrapper(4)(Resize((84, 84), Normalize(Grayscale(
+        Maximum(NoopRandomStart(AtariEnv(game=game, obs_type='image', frameskip=1)))))))))

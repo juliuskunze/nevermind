@@ -55,9 +55,11 @@ class DeepQNetwork(ValueFunctionApproximation):
                  target_model_update_period: int = 500,
                  clip_error: bool = False,
                  optimizer: Optimizer = Adam(lr=1e-3),
-                 discount_factor: float = 1.):
+                 discount_factor: float = 1.,
+                 transpose_observations: Callable[[ndarray], ndarray] = lambda x: np.array(x).transpose((0, 2, 3, 1))):
         super().__init__(env)
 
+        self.transpose_observations = transpose_observations
         self.clip_error = clip_error
 
         if architecture is None:
@@ -85,14 +87,14 @@ class DeepQNetwork(ValueFunctionApproximation):
         print('Updated target model.')
 
     def all_action_values_for(self, observations: ndarray):
-        return self.target_model_function([observations])[0]
+        return self.target_model_function([self.transpose_observations(observations)])[0]
 
     def update(self, experiences: List[Experience]):
         def null_to_nan(observation):
             return np.full(self.env.observation_space.shape, np.nan) if observation is None else observation
 
-        observations = np.array([e.observation for e in experiences])
-        next_observations = np.array([null_to_nan(e.next_observation) for e in experiences])
+        observations = self.transpose_observations([e.observation for e in experiences])
+        next_observations = [null_to_nan(e.next_observation) for e in experiences]
         actions = np.array([e.action for e in experiences])
 
         next_value_estimates = self.all_action_values_for(next_observations)

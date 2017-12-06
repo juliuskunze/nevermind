@@ -1,6 +1,9 @@
 import random
+from math import inf
 from pathlib import Path
 from typing import Callable, Sequence, List
+
+import numpy as np
 
 from nevermind.deepq import ValueFunctionApproximation, DeepQNetwork
 from nevermind.replay import ReplayBuffer, Experience
@@ -19,7 +22,8 @@ def linearly_decreasing_exploration(initial_exploration: float, decrease_start: 
 
 
 class TrainingSummary:
-    def __init__(self, q: ValueFunctionApproximation, timestep: int = 0):
+    def __init__(self, q: ValueFunctionApproximation, num_timesteps: int, timestep: int = 0):
+        self.num_timesteps = num_timesteps
         self.q = q
         self.timestep = timestep
         self.returns: List[float] = []
@@ -27,6 +31,22 @@ class TrainingSummary:
         self.exploration_rates: List[float] = []
         self.episode_lengths: List[int] = []
         self.buffer_sizes: List[int] = []
+
+    def average_return(self, num_last_episodes: int):
+        return np.average(self.returns[-num_last_episodes:]) if len(self.returns) > 0 else -inf
+
+    @property
+    def last_return(self):
+        return self.returns[-1] if len(self.returns) > 0 else -inf
+
+    @property
+    def last_exploration_rate(self):
+        return self.exploration_rates[-1]
+
+    def __str__(self):
+        return f'timestep {self.timestep} ({100 * self.timestep / self.num_timesteps:.2f}%), ' \
+               f'episode #{len(self.returns)} return: {self.last_return} (recent average: {self.average_return(num_last_episodes=100):.2f}), ' \
+               f'exploration rate: {self.last_exploration_rate:.2f}'
 
 
 class PeriodicTrainingCallback:
@@ -38,22 +58,31 @@ class PeriodicTrainingCallback:
         self.action(summary)
 
     @staticmethod
-    def save_dqn(period: int = 10000, directory: Path = None):
-        def save(summary: TrainingSummary):
-            if directory is not None:
-                directory.mkdir(exist_ok=True, parents=True)
+    def save_dqn_if_improved(period: int = 10000, file: Path = None, num_last_episodes_for_average=100):
+        class SaveCallback(PeriodicTrainingCallback):
+            def __init__(self):
+                self.last_average_return = -inf
 
-            save_to_file = None if directory is None else \
-                directory / f'step{summary.timestep}.model'
+                def save_if_improved(summary: TrainingSummary):
+                    average_return = summary.average_return(num_last_episodes_for_average)
+                    if average_return > self.last_average_return:
+                        assert isinstance(summary.q, DeepQNetwork)
+                        summary.q.save(file)
+                        print(f'Recent return average improved from {self.last_average_return} to {average_return}, '
+                              f'saving model to {file}.')
+                        self.last_average_return = average_return
 
-            assert isinstance(summary.q, DeepQNetwork)
-            summary.q.save(save_to_file)
+                super().__init__(period, action=save_if_improved)
 
-        return PeriodicTrainingCallback(action=save, period=period)
+        return SaveCallback()
 
     @staticmethod
     def render():
-        return PeriodicTrainingCallback(action=lambda context: context.q.env.render(), period=1)
+        return PeriodicTrainingCallback(action=lambda summary: summary.q.env.render(), period=1)
+
+    @staticmethod
+    def print_progress(period=1000):
+        return PeriodicTrainingCallback(action=lambda summary: print(summary), period=period)
 
 
 def train(q: ValueFunctionApproximation,
@@ -64,7 +93,7 @@ def train(q: ValueFunctionApproximation,
           final_exploration: float = .02,
           exploration_time_share: float = .1,
           exploration_by_timestep: Callable[[float], float] = None,
-          callbacks: Sequence[PeriodicTrainingCallback] = (),
+          callbacks: Sequence[PeriodicTrainingCallback] = (PeriodicTrainingCallback.print_progress(),),
           is_solved: Callable[[TrainingSummary], bool] = lambda s: False):
     if exploration_by_timestep is None:
         exploration_by_timestep = linearly_decreasing_exploration(
@@ -73,7 +102,7 @@ def train(q: ValueFunctionApproximation,
             decrease_timesteps=int(num_timesteps * exploration_time_share),
             final_exploration=final_exploration)
 
-    summary = TrainingSummary(q=q)
+    summary = TrainingSummary(q=q, num_timesteps=num_timesteps)
     buffer = ReplayBuffer(size=replay_buffer_size)
     env = q.env
 
@@ -84,11 +113,13 @@ def train(q: ValueFunctionApproximation,
         episode_length = 0
 
         while True:
+            exploration_rate = exploration_by_timestep(summary.timestep)
+            summary.exploration_rates.append(exploration_rate)
+
             for callback in callbacks:
                 if summary.timestep % callback.period == 0:
                     callback(summary)
 
-            exploration_rate = exploration_by_timestep(summary.timestep)
             explore = random.random() < exploration_rate
             action = env.action_space.sample() if explore else q.greedy_action(observation)
             next_observation, reward, done, info = (None, 0., True, None) if done else env.step(int(action))
@@ -106,13 +137,10 @@ def train(q: ValueFunctionApproximation,
                 loss = q.update(experiences=experiences)
                 summary.losses.append(loss)
             summary.timestep += 1
-            summary.exploration_rates.append(exploration_rate)
 
             if experience.is_terminal:
                 break
 
-        print(f'Return #{len(summary.returns)}: {episode_return}, exploration rate: {exploration_rate:.2f}, ' +
-              f'timestep {summary.timestep} ({100 * summary.timestep / num_timesteps:.2f}%)')
         summary.returns.append(episode_return)
         summary.episode_lengths.append(episode_length)
 

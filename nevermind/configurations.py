@@ -66,13 +66,13 @@ def summary_file(env_name: str, run_name: str):
 
 
 def save_callback(env_name: str, run_name: str):
-    return PeriodicTrainingCallback.save_dqn(directory=Path('data') / 'models' / env_name / run_name)
+    return PeriodicTrainingCallback.save_dqn_if_improved(file=Path('data') / 'models' / env_name / f'{run_name}.model')
 
 
 def average_return_above(minimum_average_return: float, num_last_episodes: int = 100):
     def is_stable(summary: TrainingSummary):
-        return len(summary.returns) >= num_last_episodes and \
-               np.average(summary.returns[-num_last_episodes:]) >= minimum_average_return
+        return len(summary.returns) >= num_last_episodes and summary.average_return(
+            num_last_episodes) >= minimum_average_return
 
     return is_stable
 
@@ -81,7 +81,8 @@ def train_cartpole(num_runs=1, render=True):
     run_name = timestamp()
     env_name = 'CartPole-v0'
     summaries = [train(DeepQNetwork(gym.make(env_name)),
-                       callbacks=[save_callback(env_name, run_name=name),
+                       callbacks=[PeriodicTrainingCallback.print_progress(),
+                                  save_callback(env_name, run_name=name),
                                   save_cartpole_q_plot_callback(run_name=name),
                                   save_cartpole_q_plot_callback(run_name=name, show_advantage=True)] +
                                  ([PeriodicTrainingCallback.render()] if render else []),
@@ -97,7 +98,8 @@ def train_lunar_lander(num_runs=1, render=True):
     summaries = [train(DeepQNetwork(gym.make(env_name), target_model_update_period=10000),
                        replay_buffer_size=100000,
                        num_timesteps=5000000,
-                       callbacks=[save_callback(env_name, run_name=f'{run_name}{f"-{i}" if i > 0 else ""}')] +
+                       callbacks=[PeriodicTrainingCallback.print_progress(),
+                                  save_callback(env_name, run_name=f'{run_name}{f"-{i}" if i > 0 else ""}')] +
                                  ([PeriodicTrainingCallback.render()] if render else []),
                        is_solved=average_return_above(200)) for i in range(num_runs)]
     plot_training_summaries(summaries, summary_file(env_name, run_name=run_name))
@@ -107,13 +109,14 @@ def train_mountain_car(num_runs=1, render=True):
     run_name = timestamp()
     env_name = 'MountainCar-v0'
     summaries = [train(DeepQNetwork(gym.make(env_name)),
-                       callbacks=[save_callback(env_name, run_name=f'{run_name}{f"-{i}" if i > 0 else ""}')] +
+                       callbacks=[PeriodicTrainingCallback.print_progress(),
+                                  save_callback(env_name, run_name=f'{run_name}{f"-{i}" if i > 0 else ""}')] +
                                  ([PeriodicTrainingCallback.render()] if render else []),
                        is_solved=average_return_above(-110)) for i in range(num_runs)]
     plot_training_summaries(summaries, summary_file(env_name, run_name=run_name))
 
 
-def train_atari(game_name='breakout', num_runs: int = 1, render: bool = True):
+def train_atari(game_name='breakout', num_runs: int = 1, render: bool = True, num_timesteps=10000000):
     from nevermind.env import atari_env
 
     run_name = timestamp()
@@ -131,17 +134,17 @@ def train_atari(game_name='breakout', num_runs: int = 1, render: bool = True):
 
     optimizer = optimizers.TFOptimizer(tf.train.RMSPropOptimizer(learning_rate=2.5e-4, momentum=.95, epsilon=.01))
 
-    num_timesteps = 10000000
-
     summary = [train(DeepQNetwork(env, architecture=architecture, optimizer=optimizer,
                                   target_model_update_period=10000,
                                   discount_factor=.99,
-                                  clip_error=True),
+                                  clip_error=True,
+                                  transpose_observations=lambda x: np.array(x).transpose((0, 2, 3, 1))),
                      num_timesteps=num_timesteps,
                      replay_buffer_size=1000000,
                      final_exploration=.1,
                      exploration_time_share=1000000 / num_timesteps,
                      learning_starts=50000,
-                     callbacks=[save_callback(game_name, run_name=f'{run_name}{f"-{i}" if i > 0 else ""}')] +
+                     callbacks=[PeriodicTrainingCallback.print_progress(),
+                                save_callback(game_name, run_name=f'{run_name}{f"-{i}" if i > 0 else ""}')] +
                                ([PeriodicTrainingCallback.render()] if render else [])) for i in range(num_runs)]
     plot_training_summaries(summary, summary_file(game_name, run_name=run_name))

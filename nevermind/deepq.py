@@ -56,7 +56,7 @@ class DeepQNetwork(ValueFunctionApproximation):
                  clip_error: bool = False,
                  optimizer: Optimizer = Adam(lr=1e-3),
                  discount_factor: float = 1.,
-                 transpose_observations: Callable[[ndarray], ndarray] = lambda x: np.array(x).transpose((0, 2, 3, 1))):
+                 transpose_observations: Callable[[ndarray], ndarray] = lambda x: np.array(x)):
         super().__init__(env)
 
         self.transpose_observations = transpose_observations
@@ -117,4 +117,5 @@ class DeepQNetwork(ValueFunctionApproximation):
         return loss
 
     def save(self, file: Path):
+        Path(file.parent).mkdir(exist_ok=True, parents=True)
         self.target_model.save(str(file))

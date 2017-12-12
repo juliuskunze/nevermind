@@ -26,7 +26,7 @@ Train for the [lunar lander](https://gym.openai.com/envs/LunarLander-v2/) enviro
 configurations.train_lunar_lander()
 ```
 
-Training for the Atari 2600 game [breakout](https://gym.openai.com/envs/Breakout-v0/) takes days on a decent GPU, and is currently being tested: 
+Training for the Atari 2600 game [breakout](https://gym.openai.com/envs/Breakout-v0/) takes days on a GPU: 
 
 ```python
 configurations.train_atari(game='breakout')
@@ -46,3 +46,6 @@ Cartpole training summary of 10 runs:
 
 Summary of a successful lunar lander training run:
 ![Lunar Lander Summary](plots/lunarlander_summary.png)
+
+10M timesteps of training for the breakout Atari environment:
+![Atari Breakout Summary](plots/breakout_summary.png)
